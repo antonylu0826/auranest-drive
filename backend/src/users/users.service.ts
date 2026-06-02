@@ -1,7 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { paginate, toPrismaOrderBy, toPrismaPage, type PaginationQuery } from '../common/pagination';
 import { UpdateRoleDto, UpdateUserDto } from './dto/user.dto';
+
+const SORTABLE = ['name', 'email', 'createdAt'] as const;
 
 const PUBLIC_FIELDS = {
   id: true,
@@ -26,11 +29,24 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
-  findAll() {
-    return this.prisma.user.findMany({
-      select: PUBLIC_FIELDS,
-      orderBy: { createdAt: 'asc' },
-    });
+  async findAll(query: PaginationQuery) {
+    const { skip, take } = toPrismaPage(query);
+    const orderBy = toPrismaOrderBy(query, SORTABLE, { createdAt: 'asc' });
+    const where = query.search
+      ? {
+          OR: [
+            { name: { contains: query.search, mode: 'insensitive' as const } },
+            { email: { contains: query.search, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
+
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({ where, skip, take, orderBy, select: PUBLIC_FIELDS }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return paginate(data, total);
   }
 
   async findById(id: string) {

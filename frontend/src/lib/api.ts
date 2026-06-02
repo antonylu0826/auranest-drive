@@ -20,6 +20,28 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json() as Promise<T>;
 }
 
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+}
+
+export interface ListQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortField?: string;
+  sortOrder?: "ASC" | "DESC";
+}
+
+function toQueryString(params: Record<string, unknown>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") q.set(k, String(v));
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 export interface User {
   id: string;
   email: string;
@@ -30,7 +52,8 @@ export interface User {
 }
 
 export const usersApi = {
-  list: () => apiFetch<User[]>("/users"),
+  list: (query?: ListQuery) =>
+    apiFetch<PaginatedResult<User>>(`/users${toQueryString({ ...query })}`),
   get: (id: string) => apiFetch<User>(`/users/${id}`),
   create: (data: { email: string; password: string; name?: string; role?: UserRole }) =>
     apiFetch<User>("/users", { method: "POST", body: JSON.stringify(data) }),
@@ -40,4 +63,3 @@ export const usersApi = {
     apiFetch<User>(`/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
   remove: (id: string) => apiFetch<void>(`/users/${id}`, { method: "DELETE" }),
 };
-

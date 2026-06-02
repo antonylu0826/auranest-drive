@@ -6,6 +6,7 @@ export interface NavSubItem {
   icon?: LucideIcon;
   comingSoon?: boolean;
   isNew?: boolean;
+  newTab?: boolean;
 }
 
 export interface NavMainItem {
@@ -16,6 +17,7 @@ export interface NavMainItem {
   comingSoon?: boolean;
   isNew?: boolean;
   adminOnly?: boolean;
+  newTab?: boolean;
 }
 
 export interface NavGroup {

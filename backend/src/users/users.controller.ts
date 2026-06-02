@@ -1,9 +1,22 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { paginationQuerySchema, type PaginationQuery } from '../common/pagination';
 import { CreateUserDto, UpdateRoleDto, UpdateUserDto } from './dto/user.dto';
 import { UsersService } from './users.service';
 
@@ -20,8 +33,8 @@ export class UsersController {
   }
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery) {
+    return this.usersService.findAll(query);
   }
 
   @Get(':id')

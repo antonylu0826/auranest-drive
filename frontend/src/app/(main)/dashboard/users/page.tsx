@@ -4,14 +4,14 @@ import {
   type ColumnDef,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
   getSortedRowModel,
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDebounce } from "@/hooks/use-debounce";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,8 @@ import { type User, usersApi } from "@/lib/api";
 import { CreateUserDialog } from "./_components/create-user-dialog";
 import { DeleteUserDialog } from "./_components/delete-user-dialog";
 import { EditUserDialog } from "./_components/edit-user-dialog";
+
+const PAGE_SIZE = 20;
 
 function TableSkeleton({ cols }: { cols: number }) {
   return (
@@ -63,13 +65,23 @@ export default function UsersPage() {
   const tc = useTranslations("common");
   const qc = useQueryClient();
   const currentUser = useCurrentUser();
+
   const [sorting, setSorting] = useState<SortingState>([]);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebounce(search, 300);
 
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ["users"],
-    queryFn: usersApi.list,
+  const sortField = sorting[0]?.id;
+  const sortOrder = sorting[0] ? (sorting[0].desc ? "DESC" : "ASC") : undefined;
+
+  const { data: result, isLoading } = useQuery({
+    queryKey: ["users", page, PAGE_SIZE, debouncedSearch, sortField, sortOrder],
+    queryFn: () => usersApi.list({ page, limit: PAGE_SIZE, search: debouncedSearch || undefined, sortField, sortOrder }),
   });
+
+  const users = result?.data ?? [];
+  const total = result?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
@@ -107,6 +119,7 @@ export default function UsersPage() {
       {
         accessorKey: "role",
         header: t("role"),
+        enableSorting: false,
         cell: ({ row }) => (
           <Badge variant="outline">{t(`roles.${row.original.role}`)}</Badge>
         ),
@@ -114,6 +127,7 @@ export default function UsersPage() {
       {
         accessorKey: "isActive",
         header: t("status"),
+        enableSorting: false,
         cell: ({ row }) => (
           <Badge variant={row.original.isActive ? "default" : "secondary"}>
             {row.original.isActive ? t("active") : t("disabled")}
@@ -131,6 +145,7 @@ export default function UsersPage() {
       },
       {
         id: "actions",
+        enableSorting: false,
         cell: ({ row }) => {
           const user = row.original;
           const isSelf = user.id === currentUser?.sub;
@@ -154,29 +169,20 @@ export default function UsersPage() {
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentUser?.sub, t, tc, toggleMutation],
   );
 
-  const filtered = useMemo(
-    () =>
-      users.filter(
-        (u) =>
-          !search ||
-          u.email.toLowerCase().includes(search.toLowerCase()) ||
-          (u.name ?? "").toLowerCase().includes(search.toLowerCase()),
-      ),
-    [users, search],
-  );
-
   const table = useReactTable({
-    data: filtered,
+    data: users,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      setSorting(updater);
+      setPage(1);
+    },
+    manualSorting: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
   });
 
   return (
@@ -185,14 +191,14 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
           <p className="text-muted-foreground text-sm">
-            {users.length} {t("title").toLowerCase()}
+            {total} {t("title").toLowerCase()}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Input
             placeholder={t("searchPlaceholder")}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="h-9 w-56"
           />
           <CreateUserDialog />
@@ -235,6 +241,20 @@ export default function UsersPage() {
               )}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>{tc("page")} {page} / {totalPages}</span>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>

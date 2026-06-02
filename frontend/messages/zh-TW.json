@@ -10,7 +10,8 @@
     "enable": "啟用",
     "disable": "停用",
     "loading": "載入中…",
-    "noData": "找不到資料。"
+    "noData": "找不到資料。",
+    "page": "第"
   },
   "auth": {
     "signIn": "登入",
