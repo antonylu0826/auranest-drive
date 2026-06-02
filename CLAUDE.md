@@ -190,6 +190,23 @@ V2 與 V1 的差異：**沒有 multi-schema，沒有 `@@schema()`**，每個 app
 - No cross-app FK（app 之間透過 event 或 API 溝通）
 - Prisma client output: 預設路徑（`node_modules/@prisma/client`），**不使用自訂 output**
 
+## Frontend UI 元件規範
+
+建表單或 UI 前，**必須先查閱 `frontend/src/components/ui/`**，優先使用範本已有的 shadcn 元件，不直接用 HTML 原生控制項。
+
+| 用途 | 使用元件 |
+|------|----------|
+| 日期選擇 | `DatePicker`（`components/ui/date-picker.tsx`）|
+| 日期範圍 | `DateRangePicker`（`components/ui/date-range-picker.tsx`）|
+| 下拉選單 | `Select`（`components/ui/select.tsx`）|
+| 核取方塊 | `Checkbox`（`components/ui/checkbox.tsx`）|
+| 開關切換 | `Switch`（`components/ui/switch.tsx`）|
+| 多行文字 | `Textarea`（`components/ui/textarea.tsx`）|
+
+凡 `<input type="date">` 、`<select>`、`<input type="checkbox">` 等 HTML 原生控制項，都應替換為上表對應的 shadcn 元件以確保視覺一致性。
+
+---
+
 ## Error Response Shape
 
 與 V1 相同（`GlobalExceptionFilter` inline 在 `common/filters/`）：
