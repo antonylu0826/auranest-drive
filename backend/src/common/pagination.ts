@@ -33,6 +33,7 @@ export function toPrismaPage(query: Pick<PaginationQuery, 'page' | 'limit'>): {
   return { skip: (page - 1) * limit, take: limit };
 }
 
+/** defaultOrderBy must have exactly ONE key — Prisma 6 does not accept multi-key orderBy objects. */
 export function toPrismaOrderBy(
   query: Pick<PaginationQuery, 'sortField' | 'sortOrder'>,
   allowedFields: readonly string[],
