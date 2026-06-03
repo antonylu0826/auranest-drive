@@ -36,6 +36,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
       <AppSidebar variant={variant} collapsible={collapsible} />
       <SidebarInset
         className={cn(
+          "min-w-0",
           "[html[data-content-layout=centered]_&>*]:mx-auto",
           "[html[data-content-layout=centered]_&>*]:w-full",
           "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
