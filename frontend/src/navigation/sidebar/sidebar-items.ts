@@ -1,4 +1,4 @@
-import { type LucideIcon, Home, Users } from "lucide-react";
+import { type LucideIcon, Clock, FolderOpen, Home, Share2, Trash2, Users } from "lucide-react";
 
 export interface NavSubItem {
   title: string;
@@ -40,6 +40,32 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 2,
+    label: "drive",
+    items: [
+      {
+        title: "myDrive",
+        url: "/dashboard/drive",
+        icon: FolderOpen,
+      },
+      {
+        title: "sharedWithMe",
+        url: "/dashboard/drive/shared",
+        icon: Share2,
+      },
+      {
+        title: "recent",
+        url: "/dashboard/drive/recent",
+        icon: Clock,
+      },
+      {
+        title: "trash",
+        url: "/dashboard/drive/trash",
+        icon: Trash2,
+      },
+    ],
+  },
+  {
+    id: 3,
     label: "admin",
     adminOnly: true,
     items: [

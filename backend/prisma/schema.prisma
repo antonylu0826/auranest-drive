@@ -13,20 +13,99 @@ enum UserRole {
   USER
 }
 
+/// Permission level granted to a user on a shared file.
+enum SharePermission {
+  VIEW
+  EDIT
+}
+
 /// System user account. Used for authentication in local-auth mode.
 /// In OIDC mode the password field is unused; identity is verified via JWKS.
 model User {
-  id        String   @id @default(cuid())
+  id            String        @id @default(cuid())
   /// Login email, must be unique across the system.
-  email     String   @unique
-  password  String
+  email         String        @unique
+  password      String
   /// Display name shown in UI; optional.
-  name      String?
-  role      UserRole @default(USER)
+  name          String?
+  role          UserRole      @default(USER)
   /// Soft-disable without deleting — preserves audit history.
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  ownedFolders  DriveFolder[] @relation("FolderOwner")
+  ownedFiles    DriveFile[]   @relation("FileOwner")
+  sharedFiles   FileShare[]   @relation("SharedWithUser")
 
   @@map("users")
+}
+
+/// Storage folder for organising files. Supports nested hierarchy via parentId.
+model DriveFolder {
+  id        String        @id @default(cuid())
+  /// Display name shown in the file browser.
+  name      String
+  /// Owner of this folder.
+  ownerId   String        @map("owner_id")
+  owner     User          @relation("FolderOwner", fields: [ownerId], references: [id])
+  /// Parent folder; null means root (My Drive).
+  parentId  String?       @map("parent_id")
+  parent    DriveFolder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children  DriveFolder[] @relation("FolderTree")
+  files     DriveFile[]
+  /// Soft-delete — trashed folders hidden from normal view.
+  isTrashed Boolean       @default(false) @map("is_trashed")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("drive_folders")
+}
+
+/// Uploaded file metadata. Actual binary is stored in an external object store.
+model DriveFile {
+  id          String       @id @default(cuid())
+  /// Original filename as uploaded.
+  name        String
+  /// MIME type detected at upload time, e.g. "image/png".
+  mimeType    String       @map("mime_type")
+  /// File size in bytes.
+  size        Int
+  /// Path or key in the external object store (S3-compatible).
+  storagePath String       @map("storage_path")
+  /// Owner of this file.
+  ownerId     String       @map("owner_id")
+  owner       User         @relation("FileOwner", fields: [ownerId], references: [id])
+  /// Containing folder; null means root (My Drive).
+  folderId    String?      @map("folder_id")
+  folder      DriveFolder? @relation(fields: [folderId], references: [id])
+  shares      FileShare[]
+  /// Soft-delete flag.
+  isTrashed   Boolean      @default(false) @map("is_trashed")
+  /// Monotonically increasing version counter; incremented on each online-editor save.
+  version     Int          @default(1)
+  /// WOPI lock token held by the Collabora server during an active edit session.
+  lockToken   String?      @map("lock_token")
+  /// User ID that holds the current lock.
+  lockedBy    String?      @map("locked_by")
+  /// Timestamp when the lock was acquired or last refreshed.
+  lockedAt    DateTime?    @map("locked_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("drive_files")
+}
+
+/// Sharing record granting a user access to a specific file.
+model FileShare {
+  id           String          @id @default(cuid())
+  fileId       String          @map("file_id")
+  file         DriveFile       @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  /// User granted access.
+  sharedWithId String          @map("shared_with_id")
+  sharedWith   User            @relation("SharedWithUser", fields: [sharedWithId], references: [id])
+  permission   SharePermission
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@unique([fileId, sharedWithId])
+  @@map("file_shares")
 }

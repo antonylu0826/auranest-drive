@@ -17,6 +17,24 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -29,12 +47,24 @@ services:
       OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-auranest-drive}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-104857600}
+      WOPI_TOKEN_SECRET: ${WOPI_TOKEN_SECRET:-dev-wopi-secret-change-me}
+      WOPI_TOKEN_TTL_SEC: ${WOPI_TOKEN_TTL_SEC:-3600}
+      COLLABORA_URL: ${COLLABORA_URL:-http://localhost:9980}
+      WOPI_PUBLIC_URL: ${WOPI_PUBLIC_URL:-http://backend:3000}
       NODE_ENV: production
       PORT: "3000"
     ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - "${BACKEND_PORT:-3010}:3000"
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
@@ -49,15 +79,38 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3010}
       NEXT_PUBLIC_AUTH_MODE: ${AUTH_MODE:-local}
       NEXT_PUBLIC_OIDC_ISSUER: ${OIDC_ISSUER:-}
     ports:
-      - "${FRONTEND_PORT:-3001}:3001"
+      - "${FRONTEND_PORT:-3011}:3001"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
 
+  collabora:
+    image: collabora/code:latest
+    environment:
+      # aliasgroup1 = 允許呼叫 WOPI 的 backend 位置
+      # Docker 全端部署：http://backend:3000
+      # 本機開發：http://host.docker.internal:3010
+      - aliasgroup1=${WOPI_PUBLIC_URL:-http://host.docker.internal:3010}
+      - DONT_GEN_SSL_CERT=1
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=false
+      - username=${COLLABORA_ADMIN_USER:-admin}
+      - password=${COLLABORA_ADMIN_PASSWORD:-admin}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9980:9980"
+    cap_add:
+      - MKNOD
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+    restart: unless-stopped
+
 volumes:
   db_data:
+  minio_data:

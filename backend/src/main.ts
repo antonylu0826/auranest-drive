@@ -1,11 +1,16 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import * as express from 'express';
 import pinoHttp from 'pino-http';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // WOPI PutFile delivers the file as a raw binary body — must be parsed before
+  // the default JSON body parser runs, otherwise req.body will be an empty object.
+  app.use('/wopi/files', express.raw({ type: '*/*', limit: '200mb' }));
 
   app.use(pinoHttp({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' }));
 

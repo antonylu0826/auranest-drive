@@ -1,6 +1,127 @@
-# auranest-app-template — Claude Development Guide
+# auranest-drive — Claude Development Guide
 
 ## 這個 repo 是什麼
+
+AuraNest **Drive** — 基於 V2 架構的雲端檔案管理 app。從 `auranest-app-template` fork，完全獨立部署。
+
+### App 定位
+
+| 面向 | 說明 |
+|------|------|
+| **功能** | 檔案上傳（MinIO）、資料夾階層巡覽、線上編輯（Collabora WOPI）、新增文件（docx/xlsx/pptx）、檔案共用（VIEW/EDIT 權限）、垃圾桶軟刪除 |
+| **Port** | Backend `:3010`、Frontend `:3011`、MinIO `:9000`、Collabora `:9980` |
+| **DB** | `app_db`（獨立 Postgres 實例） |
+| **Auth** | `AUTH_MODE=local`（預設）或 `AUTH_MODE=oidc` |
+
+### 業務模型
+
+| Model | 用途 |
+|-------|------|
+| `DriveFolder` | 資料夾，支援巢狀結構（`parentId` 自我關聯），`isTrashed` 軟刪除 |
+| `DriveFile` | 檔案 metadata；binary 存於 MinIO（`storagePath`）；`version` / `lockToken` / `lockedBy` / `lockedAt` 供 WOPI 使用 |
+| `FileShare` | 共用授權記錄（`VIEW` / `EDIT`），`@@unique([fileId, sharedWithId])` |
+
+### API 端點（Drive 業務）
+
+```
+# 資料夾
+GET    /drive/folders              列出資料夾（parentId / trashed / search / 分頁）
+POST   /drive/folders              建立資料夾
+POST   /drive/folders/trash/empty  清空垃圾桶（所有已刪資料夾）
+GET    /drive/folders/:id          取得單一資料夾
+PATCH  /drive/folders/:id          更新名稱 / parentId
+PATCH  /drive/folders/:id/trash    移至垃圾桶
+PATCH  /drive/folders/:id/restore  從垃圾桶還原
+DELETE /drive/folders/:id          永久刪除
+
+# 檔案
+GET    /drive/files                列出檔案（folderId / trashed / search / 分頁）
+POST   /drive/files/upload         上傳檔案（multipart/form-data，folderId 可選）
+POST   /drive/files/trash/empty    清空垃圾桶（含從 MinIO 刪除 binary）
+GET    /drive/files/shared-with-me 取得他人與我共用的檔案
+GET    /drive/files/:id            取得單一檔案（owner 或已授權 user 均可）
+GET    /drive/files/:id/download   取得 presigned download URL（1 小時有效）
+PATCH  /drive/files/:id            更新名稱 / folderId
+PATCH  /drive/files/:id/trash      移至垃圾桶
+PATCH  /drive/files/:id/restore    從垃圾桶還原
+DELETE /drive/files/:id            永久刪除（含從 MinIO 刪除 binary）
+POST   /drive/files/:id/shares     共用給指定 user（需 owner）
+DELETE /drive/files/:id/shares/:userId 移除共用
+
+# WOPI（Collabora Online 回呼，以 WOPI token 驗證）
+GET    /wopi/editor-url/:fileId    取得 Collabora editor URL + WOPI token（需 JwtAuthGuard）
+GET    /wopi/files/:fileId         CheckFileInfo
+GET    /wopi/files/:fileId/contents GetFile（stream from MinIO）
+POST   /wopi/files/:fileId/contents PutFile（存檔，raw buffer → MinIO，version++）
+POST   /wopi/files/:fileId         Lock / Unlock / RefreshLock / GetLock
+```
+
+### Frontend 頁面結構
+
+```
+dashboard/drive/                   # 我的雲端硬碟（資料夾巡覽、多層麵包屑、搜尋）
+  _components/
+    new-doc-button.tsx             # 新增文件下拉（docx/xlsx/pptx 範本 → 上傳 → 開 editor）
+    create-folder-dialog.tsx       # 新增資料夾 Dialog
+    rename-folder-dialog.tsx       # 資料夾重新命名 Dialog
+    rename-file-dialog.tsx         # 檔案重新命名 Dialog
+    upload-zone.tsx                # 上傳區（拖放 / 點擊，XHR 進度條）
+    drive-breadcrumb.tsx           # 資料夾路徑麵包屑（folderPath 陣列管理）
+    drive-item-row.tsx             # 資料夾/檔案列表列（依副檔名顯示不同圖示）
+dashboard/drive/shared/            # 與我共用
+dashboard/drive/recent/            # 最近檔案（按 updatedAt 排序）
+dashboard/drive/trash/             # 垃圾桶（單筆還原/永久刪除 + 清空全部）
+
+(editor)/editor/files/[id]/edit/   # Collabora 全螢幕 iframe（URL: /editor/files/:id/edit）
+  layout.tsx                       # 極簡 <div> wrapper，無 sidebar
+
+frontend/public/templates/         # 新增文件範本
+  sample.docx / sample.xlsx / sample.pptx
+```
+
+### Storage（MinIO）
+
+- `backend/src/storage/storage.service.ts` — S3-compatible client，`onModuleInit` 自動建 bucket
+- 上傳路徑格式：`{ownerId}/{fileId}/{originalName}`
+- 刪除：永久刪除 DriveFile 時一起從 MinIO 刪除 binary
+- 環境變數：`MINIO_ENDPOINT` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` / `MINIO_BUCKET` / `MAX_UPLOAD_BYTES`
+
+### Collabora Online（WOPI）
+
+- `backend/src/wopi/` — WopiTokenService（HS256 JWT）、WopiTokenGuard（從 `?access_token=` 驗）、WopiController
+- WOPI token 與主 JWT 獨立（`WOPI_TOKEN_SECRET`），避免 Collabora server 拿到使用者主 token
+- `WOPI_PUBLIC_URL` = Collabora server 回呼的 backend 位址（本機開發：`http://host.docker.internal:3010`）
+- `COLLABORA_URL` = frontend 用來產生 editor URL（`http://localhost:9980`）
+- 支援副檔名：doc/docx/odt/xls/xlsx/ods/csv/ppt/pptx/odp/odg 等（見 `COLLABORA_EXTENSIONS`）
+- `main.ts` 在 JSON body parser 前加 `express.raw({ type: '*/*', limit: '200mb' })` for `/wopi/files`，讓 PutFile 拿到 raw buffer
+
+### Docker 設定注意事項
+
+```yaml
+# Collabora 必要設定
+cap_add: [MKNOD, SYS_ADMIN]
+security_opt: [seccomp=unconfined]
+extra_params: --o:ssl.enable=false --o:ssl.termination=false  # 停用 SSL，否則找不到憑證
+```
+
+```dockerfile
+# backend/Dockerfile
+# pnpm v11 有 minimumReleaseAge supply-chain check，Docker fresh install 會擋今日新發布的套件
+# 解法：ENV npm_config_minimum_release_age=0 + pnpm@9.15.0（v9 無此 check）
+# 不 COPY pnpm-workspace.yaml（v9 不認識 v11 的 allowBuilds 格式）
+# --shamefully-hoist：pnpm symlink 結構 COPY 到 runner stage 會斷，用 flat node_modules
+# CMD ["node", "dist/src/main"]（tsconfig 無 rootDir，output 在 dist/src/ 而非 dist/）
+```
+
+### TODO（後續實作）
+
+- [ ] 檔案預覽（圖片 / PDF inline）
+- [ ] 拖曳移動檔案 / 資料夾
+- [ ] 共用管理 UI（檢視 / 移除共用對象）
+
+---
+
+## 這個 repo 是什麼（原始 template 說明）
 
 AuraNest **V2 架構**的 app 範本。每個業務 app 從這個 template fork 出去，完全獨立部署，不依賴其他 app。
 
@@ -41,7 +162,19 @@ backend/                    NestJS 11 + Prisma 6
     prisma/                 PrismaService（Global）
     common/filters/         GlobalExceptionFilter（統一 error shape）
     health/                 GET /health（Terminus）
-  prisma/schema.prisma      User model（含 UserRole enum: ADMIN/USER）
+    storage/
+      storage.service.ts    MinIO/S3 client（putObject / getObject / deleteObject / presignedUrl）
+      storage.module.ts
+    drive/
+      drive.module.ts       DriveModule（imports StorageModule）
+      folders/              FoldersController / FoldersService / dto
+      files/                FilesController / FilesService / dto（upload multipart + WOPI download）
+    wopi/
+      wopi.controller.ts    WOPI 5 端點（editor-url / CheckFileInfo / GetFile / PutFile / Lock）
+      wopi-token.service.ts HS256 JWT issue/verify（獨立 secret）
+      wopi-token.guard.ts   從 ?access_token= 驗 WOPI JWT
+      wopi.module.ts
+  prisma/schema.prisma      User + DriveFolder + DriveFile + FileShare + SharePermission
   prisma/seed.ts            建立預設 ADMIN 帳號（讀 SEED_USER_* env vars，upsert 不重複）
 
 frontend/                   Next.js 16 + Tailwind v4 + shadcn/ui
@@ -72,7 +205,7 @@ frontend/                   Next.js 16 + Tailwind v4 + shadcn/ui
       provider.tsx          I18nProvider（React Context）+ useTranslations() + useLocale()
     lib/
       auth.ts               token 管理、loginLocal()、redirectToOidc()、decodeToken()
-      api.ts                apiFetch()（自動帶 Bearer token）+ usersApi
+      api.ts                apiFetch()（自動帶 Bearer token）+ usersApi + foldersApi + filesApi + wopiApi + uploadFile()
     hooks/use-current-user  從 JWT decode 當前使用者（useEffect 讀 localStorage，避免 hydration mismatch）
     navigation/sidebar/
       sidebar-items.ts      ⚠️ Fork 後加業務頁面 — title 用 i18n key（對應 messages.sidebar）
@@ -80,7 +213,7 @@ frontend/                   Next.js 16 + Tailwind v4 + shadcn/ui
     providers/              QueryProvider（TanStack Query）
     scripts/theme-boot.tsx  Pre-hydration theme boot script（export 字串，layout 直接注入）
 
-docker-compose.yml          db + backend + frontend，完全自包含
+docker-compose.yml          db + minio + backend + frontend + collabora，完全自包含
 .env                        Docker Compose 用（POSTGRES_* / AUTH_MODE / SEED_USER_* 等）
 backend/.env                本地開發用（DATABASE_URL / AUTH_MODE / SEED_USER_* 等）
 pnpm-workspace.yaml         pnpm 11 allowBuilds 設定（biome）
