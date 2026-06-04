@@ -11,7 +11,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
+import { JwtOrApiKeyGuard } from '../../auth/guards/jwt-or-api-key.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { paginationQuerySchema, type PaginationQuery } from '../../common/pagination';
 import { CreateFolderDto, UpdateFolderDto } from './dto/folder.dto';
@@ -22,7 +22,7 @@ interface AuthRequest {
 }
 
 @Controller('drive/folders')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtOrApiKeyGuard)
 export class FoldersController {
   constructor(private readonly foldersService: FoldersService) {}
 

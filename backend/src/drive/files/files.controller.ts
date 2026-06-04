@@ -14,7 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { JwtAuthGuard } from '../../auth/guards/jwt.guard';
+import { JwtOrApiKeyGuard } from '../../auth/guards/jwt-or-api-key.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { paginationQuerySchema, type PaginationQuery } from '../../common/pagination';
 import { ShareFileDto, UpdateFileDto } from './dto/file.dto';
@@ -25,7 +25,7 @@ interface AuthRequest {
 }
 
 @Controller('drive/files')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtOrApiKeyGuard)
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 

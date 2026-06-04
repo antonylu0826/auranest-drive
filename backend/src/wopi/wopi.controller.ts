@@ -15,7 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { JwtAuthGuard } from '../auth/guards/jwt.guard';
+import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { WopiTokenGuard } from './wopi-token.guard';
@@ -46,7 +46,7 @@ export class WopiController {
   // ── Get editor URL (requires regular JWT auth) ───────────────────────────
 
   @Get('editor-url/:fileId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard)
   async getEditorUrl(@Param('fileId') fileId: string, @Req() req: AuthRequest) {
     const userId = req.user.sub;
 
