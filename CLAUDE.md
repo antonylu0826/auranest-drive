@@ -428,6 +428,8 @@ model MyModel {
 
 > ⚠️ **停掉 dev server** 再執行 generate / migrate（避免 Windows DLL 鎖定）
 
+> ⚠️ **只改 `///` doc comment（不動 schema 結構）也需要手動執行 `prisma generate`**，因為不會產生 migration。例如加 `@internal` 標記到 model 後，MetaService 的 scope 過濾要到 generate + 重啟 server 後才生效。
+
 ```bash
 npx prisma generate
 npx prisma migrate dev --name add_my_model

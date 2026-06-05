@@ -14,7 +14,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Permission } from '@prisma/client';
+import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator';
 import { JwtOrApiKeyGuard } from '../../auth/guards/jwt-or-api-key.guard';
+import { PermissionGuard } from '../../auth/guards/permission.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { paginationQuerySchema, type PaginationQuery } from '../../common/pagination';
 import { ShareFileDto, UpdateFileDto } from './dto/file.dto';
@@ -25,11 +28,12 @@ interface AuthRequest {
 }
 
 @Controller('drive/files')
-@UseGuards(JwtOrApiKeyGuard)
+@UseGuards(JwtOrApiKeyGuard, PermissionGuard)
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
   @Post('upload')
+  @RequirePermissions(Permission.DRIVE_FILE_CREATE)
   @UseInterceptors(FileInterceptor('file'))
   async upload(
     @Request() req: AuthRequest,
@@ -42,6 +46,7 @@ export class FilesController {
   }
 
   @Get()
+  @RequirePermissions(Permission.DRIVE_FILE_READ)
   findAll(
     @Request() req: AuthRequest,
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
@@ -56,12 +61,14 @@ export class FilesController {
   }
 
   @Post('trash/empty')
+  @RequirePermissions(Permission.DRIVE_FILE_DELETE)
   @HttpCode(200)
   emptyTrash(@Request() req: AuthRequest) {
     return this.filesService.emptyTrash(req.user.sub);
   }
 
   @Get('shared-with-me')
+  @RequirePermissions(Permission.DRIVE_FILE_READ)
   findSharedWithMe(
     @Request() req: AuthRequest,
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
@@ -70,43 +77,51 @@ export class FilesController {
   }
 
   @Get(':id')
+  @RequirePermissions(Permission.DRIVE_FILE_READ)
   findOne(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.filesService.findOne(req.user.sub, id);
   }
 
   @Get(':id/download')
+  @RequirePermissions(Permission.DRIVE_FILE_READ)
   async download(@Request() req: AuthRequest, @Param('id') id: string) {
     const url = await this.filesService.getDownloadUrl(req.user.sub, id);
     return { url };
   }
 
   @Patch(':id')
+  @RequirePermissions(Permission.DRIVE_FILE_UPDATE)
   update(@Request() req: AuthRequest, @Param('id') id: string, @Body() dto: UpdateFileDto) {
     return this.filesService.update(req.user.sub, id, dto);
   }
 
   @Patch(':id/trash')
+  @RequirePermissions(Permission.DRIVE_FILE_UPDATE)
   trash(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.filesService.trash(req.user.sub, id);
   }
 
   @Patch(':id/restore')
+  @RequirePermissions(Permission.DRIVE_FILE_UPDATE)
   restore(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.filesService.restore(req.user.sub, id);
   }
 
   @Delete(':id')
+  @RequirePermissions(Permission.DRIVE_FILE_DELETE)
   @HttpCode(204)
   remove(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.filesService.remove(req.user.sub, id);
   }
 
   @Post(':id/shares')
+  @RequirePermissions(Permission.DRIVE_FILE_SHARE)
   share(@Request() req: AuthRequest, @Param('id') fileId: string, @Body() dto: ShareFileDto) {
     return this.filesService.share(req.user.sub, fileId, dto);
   }
 
   @Delete(':id/shares/:userId')
+  @RequirePermissions(Permission.DRIVE_FILE_SHARE)
   @HttpCode(204)
   unshare(
     @Request() req: AuthRequest,

@@ -40,7 +40,8 @@
     "trash": "Trash",
     "admin": "Admin",
     "users": "Users",
-    "apiKeys": "API Keys"
+    "apiKeys": "API Keys",
+    "roles": "Roles"
   },
   "welcome": {
     "greeting": "Welcome back",
@@ -54,7 +55,8 @@
     "recent": "Recent",
     "trash": "Trash",
     "users": "Users",
-    "apiKeys": "API Keys"
+    "apiKeys": "API Keys",
+    "roles": "Roles"
   },
   "drive": {
     "title": "My Drive",
@@ -140,6 +142,57 @@
     "roles": {
       "ADMIN": "Admin",
       "USER": "User"
+    }
+  },
+  "roles": {
+    "title": "Roles",
+    "newRole": "New role",
+    "searchPlaceholder": "Search roles…",
+    "noRoles": "No roles found.",
+    "name": "Role code",
+    "namePlaceholder": "e.g. EDITOR",
+    "nameHint": "Uppercase letters, digits and underscores only",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "e.g. Editor",
+    "permissionPolicy": "Default access policy",
+    "permissions": "Explicit permissions",
+    "userCount": "Users",
+    "apiKeyCount": "API keys",
+    "system": "System role",
+    "editRole": "Edit role",
+    "deleteRole": "Delete role",
+    "deleteConfirm": "This action cannot be undone. The role will be permanently deleted.",
+    "cannotDeleteSystem": "System roles cannot be deleted.",
+    "cannotDeleteHasUsers": "This role is still assigned to users or API keys. Remove them first.",
+    "allowAllNote": "This role uses the Allow All policy. Explicit permissions have no effect.",
+    "policy": {
+      "DENY_ALL": "Deny all (default)",
+      "READ_ALL": "Allow reads",
+      "ALLOW_ALL": "Allow all"
+    },
+    "groups": {
+      "users": "User Management",
+      "apiKeys": "API Keys",
+      "driveFile": "Files",
+      "driveFolder": "Folders"
+    },
+    "perm": {
+      "USERS_READ": "Read users",
+      "USERS_CREATE": "Create users",
+      "USERS_UPDATE": "Update users",
+      "USERS_DELETE": "Delete users",
+      "API_KEYS_READ": "Read API keys",
+      "API_KEYS_CREATE": "Create API keys",
+      "API_KEYS_DELETE": "Delete API keys",
+      "DRIVE_FILE_READ": "Read files",
+      "DRIVE_FILE_CREATE": "Upload files",
+      "DRIVE_FILE_UPDATE": "Update files",
+      "DRIVE_FILE_DELETE": "Delete files",
+      "DRIVE_FILE_SHARE": "Share files",
+      "DRIVE_FOLDER_READ": "Read folders",
+      "DRIVE_FOLDER_CREATE": "Create folders",
+      "DRIVE_FOLDER_UPDATE": "Update folders",
+      "DRIVE_FOLDER_DELETE": "Delete folders"
     }
   },
   "apiKeys": {
