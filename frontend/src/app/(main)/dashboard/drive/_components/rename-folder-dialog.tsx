@@ -59,7 +59,7 @@ export function RenameFolderDialog({ open, onOpenChange, folderId, currentName, 
         if (o) reset({ name: currentName });
       }}
     >
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{t("rename")}</DialogTitle>
           <DialogDescription className="sr-only">{t("folderName")}</DialogDescription>

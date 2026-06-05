@@ -42,11 +42,12 @@ const TEMPLATES = [
 ] as const;
 
 interface Props {
+  spaceId: string;
   folderId: string | undefined;
   onCreated: () => void;
 }
 
-export function NewDocButton({ folderId, onCreated }: Props) {
+export function NewDocButton({ spaceId, folderId, onCreated }: Props) {
   const t = useTranslations("drive");
   const [creating, setCreating] = useState(false);
 
@@ -65,7 +66,7 @@ export function NewDocButton({ folderId, onCreated }: Props) {
       const name = `${tpl.prefix}_${ts}.${tpl.ext}`;
       const file = new File([blob], name, { type: tpl.mime });
 
-      const created = await uploadFile(file, folderId, () => {});
+      const created = await uploadFile(file, spaceId, folderId, () => {});
       onCreated();
       toast.success(`${t(tpl.key)} ${t("documentCreatedSuffix")}`);
       if (win) win.location.href = `/editor/files/${created.id}/edit`;

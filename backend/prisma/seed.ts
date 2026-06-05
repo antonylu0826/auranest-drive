@@ -6,12 +6,12 @@ const prisma = new PrismaClient();
 
 // API_KEYS_* intentionally excluded: the /api-keys endpoint is AdminGuard-only,
 // so those grants would be dead and misleading for standard users.
+// SPACE_MANAGE intentionally excluded from USER defaults: space management is ADMIN-only.
 const USER_DEFAULT_PERMISSIONS: Permission[] = [
   Permission.DRIVE_FILE_READ,
   Permission.DRIVE_FILE_CREATE,
   Permission.DRIVE_FILE_UPDATE,
   Permission.DRIVE_FILE_DELETE,
-  Permission.DRIVE_FILE_SHARE,
   Permission.DRIVE_FOLDER_READ,
   Permission.DRIVE_FOLDER_CREATE,
   Permission.DRIVE_FOLDER_UPDATE,
@@ -52,10 +52,15 @@ async function main() {
   }
 
   const hashed = await bcrypt.hash(password, 12);
-  await prisma.user.upsert({
+  const user = await prisma.user.upsert({
     where: { email },
-    update: { roleId: adminRole.id },
-    create: { email, password: hashed, name, roleId: adminRole.id },
+    update: {},
+    create: { email, password: hashed, name },
+  });
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: user.id, roleId: adminRole.id } },
+    update: {},
+    create: { userId: user.id, roleId: adminRole.id },
   });
 
   console.log(`Seed user ready: ${email} (ADMIN)`);

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type LucideIcon, FolderOpen, Users } from "lucide-react";
+import { type LucideIcon, Users } from "lucide-react";
 
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_CONFIG } from "@/config/app-config";
@@ -17,14 +17,9 @@ interface Tile {
   adminOnly?: boolean;
 }
 
+// Fork 後在這裡加業務頁面的入口卡片
+// ns 對應 i18n namespace，titleKey / descKey 對應該 namespace 內的 key
 const TILES: Tile[] = [
-  {
-    ns: "drive",
-    titleKey: "title",
-    descKey: "tileDesc",
-    href: "/dashboard/drive",
-    icon: FolderOpen,
-  },
   {
     ns: "users",
     titleKey: "title",
@@ -37,14 +32,13 @@ const TILES: Tile[] = [
 
 export default function DashboardPage() {
   const tw = useTranslations("welcome");
-  const td = useTranslations("drive");
   const tu = useTranslations("users");
   const currentUser = useCurrentUser();
-  const isAdmin = currentUser?.roleName === "ADMIN";
+  const isAdmin = currentUser?.roleNames?.includes("ADMIN") ?? false;
 
   const visibleTiles = TILES.filter((tile) => !tile.adminOnly || isAdmin);
 
-  const nsMap: Record<string, (key: string) => string> = { drive: td, users: tu };
+  const nsMap: Record<string, (key: string) => string> = { users: tu };
 
   return (
     <div className="p-6 space-y-8">

@@ -32,6 +32,7 @@ export class OidcStrategy extends PassportStrategy(Strategy, 'jwt') {
     return {
       sub: payload.sub,
       email: payload.email,
+      roleId: undefined as string | undefined,
       roleName,
       permissionPolicy: 'DENY_ALL' as const,
       permissions: [],

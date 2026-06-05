@@ -28,11 +28,12 @@ type FormValues = z.infer<typeof schema>;
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  spaceId: string;
   parentId?: string;
   onCreated: () => void;
 }
 
-export function CreateFolderDialog({ open, onOpenChange, parentId, onCreated }: Props) {
+export function CreateFolderDialog({ open, onOpenChange, spaceId, parentId, onCreated }: Props) {
   const t = useTranslations("drive");
   const tc = useTranslations("common");
 
@@ -42,7 +43,7 @@ export function CreateFolderDialog({ open, onOpenChange, parentId, onCreated }: 
   });
 
   const create = useMutation({
-    mutationFn: (data: FormValues) => foldersApi.create({ name: data.name, parentId }),
+    mutationFn: (data: FormValues) => foldersApi.create({ spaceId, name: data.name, parentId }),
     onSuccess: () => {
       toast.success(tc("create"));
       reset();
@@ -53,7 +54,7 @@ export function CreateFolderDialog({ open, onOpenChange, parentId, onCreated }: 
 
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{t("newFolder")}</DialogTitle>
           <DialogDescription className="sr-only">{t("folderNamePlaceholder")}</DialogDescription>

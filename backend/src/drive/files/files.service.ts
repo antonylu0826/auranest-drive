@@ -1,10 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { paginate, toPrismaOrderBy, toPrismaPage, type PaginationQuery } from '../../common/pagination';
-import { ShareFileDto, UpdateFileDto } from './dto/file.dto';
+import { UpdateFileDto } from './dto/file.dto';
 
 const SORTABLE = ['name', 'size', 'createdAt', 'updatedAt'] as const;
 
@@ -14,9 +13,11 @@ const FILE_FIELDS = {
   mimeType: true,
   size: true,
   storagePath: true,
-  ownerId: true,
+  spaceId: true,
+  createdById: true,
   folderId: true,
   isTrashed: true,
+  version: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -33,7 +34,8 @@ export class FilesService {
   }
 
   async upload(
-    ownerId: string,
+    createdById: string,
+    spaceId: string,
     buffer: Buffer,
     originalName: string,
     mimeType: string,
@@ -44,23 +46,24 @@ export class FilesService {
         `File exceeds maximum upload size of ${this.maxUploadBytes} bytes`,
       );
     }
+    if (folderId) await this.assertFolderInSpace(spaceId, folderId);
 
     const fileId = randomBytes(12).toString('hex');
-    const storagePath = `${ownerId}/${fileId}/${originalName}`;
+    const storagePath = `${spaceId}/${fileId}/${originalName}`;
 
     await this.storage.putObject(storagePath, buffer, mimeType);
 
     return this.prisma.driveFile.create({
-      data: { id: fileId, name: originalName, mimeType, size: buffer.length, storagePath, ownerId, folderId },
+      data: { id: fileId, name: originalName, mimeType, size: buffer.length, storagePath, spaceId, createdById, folderId },
       select: FILE_FIELDS,
     });
   }
 
-  async findAll(ownerId: string, query: PaginationQuery & { folderId?: string; trashed?: boolean }) {
+  async findAll(spaceId: string, query: PaginationQuery & { folderId?: string; trashed?: boolean }) {
     const { skip, take } = toPrismaPage(query);
     const orderBy = toPrismaOrderBy(query, SORTABLE, { createdAt: 'desc' });
     const where = {
-      ownerId,
+      spaceId,
       folderId: query.folderId !== undefined ? (query.folderId || null) : null,
       isTrashed: query.trashed ?? false,
       ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}),
@@ -72,103 +75,86 @@ export class FilesService {
     return paginate(data, total);
   }
 
-  async findSharedWithMe(userId: string, query: PaginationQuery) {
+  async findRecent(
+    accessibleSpaceIds: string[],
+    query: PaginationQuery,
+  ) {
     const { skip, take } = toPrismaPage(query);
-    const where = { sharedWithId: userId };
-    const [shares, total] = await Promise.all([
-      this.prisma.fileShare.findMany({
+    const where = { spaceId: { in: accessibleSpaceIds }, isTrashed: false };
+    const [data, total] = await Promise.all([
+      this.prisma.driveFile.findMany({
         where,
         skip,
         take,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          permission: true,
-          createdAt: true,
-          file: { select: FILE_FIELDS },
-        },
+        orderBy: { updatedAt: 'desc' },
+        select: { ...FILE_FIELDS, space: { select: { id: true, name: true } } },
       }),
-      this.prisma.fileShare.count({ where }),
+      this.prisma.driveFile.count({ where }),
     ]);
-    return paginate(shares, total);
+    return paginate(data, total);
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(id: string) {
     const file = await this.prisma.driveFile.findUnique({ where: { id }, select: FILE_FIELDS });
     if (!file || file.isTrashed) throw new NotFoundException('File not found');
-    if (file.ownerId !== userId) {
-      const share = await this.prisma.fileShare.findUnique({
-        where: { fileId_sharedWithId: { fileId: id, sharedWithId: userId } },
-      });
-      if (!share) throw new ForbiddenException();
-    }
     return file;
   }
 
-  async getDownloadUrl(userId: string, id: string): Promise<string> {
-    const file = await this.findOne(userId, id);
+  async getDownloadUrl(id: string): Promise<string> {
+    const file = await this.findOne(id);
     return this.storage.getPresignedDownloadUrl(file.storagePath);
   }
 
-  async update(ownerId: string, id: string, dto: UpdateFileDto) {
-    await this.assertOwns(ownerId, id);
-    if (dto.folderId) {
-      const folder = await this.prisma.driveFolder.findUnique({ where: { id: dto.folderId }, select: { ownerId: true } });
-      if (!folder) throw new NotFoundException('Target folder not found');
-      if (folder.ownerId !== ownerId) throw new ForbiddenException();
-    }
-    return this.prisma.driveFile.update({ where: { id }, data: dto, select: FILE_FIELDS });
+  async update(id: string, dto: UpdateFileDto) {
+    const file = await this.findOne(id);
+    if (dto.folderId) await this.assertFolderInSpace(file.spaceId, dto.folderId);
+    return this.prisma.driveFile.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.folderId !== undefined && { folderId: dto.folderId }),
+      },
+      select: FILE_FIELDS,
+    });
   }
 
-  async trash(ownerId: string, id: string) {
-    await this.assertOwns(ownerId, id);
+  async trash(id: string) {
+    await this.findOne(id);
     return this.prisma.driveFile.update({ where: { id }, data: { isTrashed: true }, select: FILE_FIELDS });
   }
 
-  async restore(ownerId: string, id: string) {
-    await this.assertOwns(ownerId, id);
+  async restore(id: string) {
+    await this.prisma.driveFile.findUniqueOrThrow({ where: { id } });
     return this.prisma.driveFile.update({ where: { id }, data: { isTrashed: false }, select: FILE_FIELDS });
   }
 
-  async remove(ownerId: string, id: string) {
-    const file = await this.assertOwns(ownerId, id);
+  async remove(id: string) {
+    // findUniqueOrThrow bypasses isTrashed so permanently-deleting a trashed file works
+    const file = await this.prisma.driveFile.findUniqueOrThrow({ where: { id }, select: FILE_FIELDS });
     await this.storage.deleteObject(file.storagePath);
     await this.prisma.driveFile.delete({ where: { id } });
   }
 
-  async emptyTrash(ownerId: string) {
+  async emptyTrash(spaceId: string) {
     const files = await this.prisma.driveFile.findMany({
-      where: { ownerId, isTrashed: true },
+      where: { spaceId, isTrashed: true },
       select: { id: true, storagePath: true },
     });
-    await Promise.allSettled(files.map((f) => this.storage.deleteObject(f.storagePath)));
-    await this.prisma.driveFile.deleteMany({ where: { ownerId, isTrashed: true } });
+    const results = await Promise.allSettled(files.map((f) => this.storage.deleteObject(f.storagePath)));
+    for (const [i, r] of results.entries()) {
+      if (r.status === 'rejected') console.error(`Failed to delete MinIO object ${files[i].storagePath}:`, r.reason);
+    }
+    await this.prisma.driveFile.deleteMany({ where: { spaceId, isTrashed: true } });
     return { count: files.length };
   }
 
-  async share(ownerId: string, fileId: string, dto: ShareFileDto) {
-    await this.assertOwns(ownerId, fileId);
-    try {
-      return await this.prisma.fileShare.create({
-        data: { fileId, sharedWithId: dto.sharedWithId, permission: dto.permission },
-      });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException('File already shared with this user');
-      }
-      throw e;
-    }
-  }
-
-  async unshare(ownerId: string, fileId: string, sharedWithId: string) {
-    await this.assertOwns(ownerId, fileId);
-    await this.prisma.fileShare.deleteMany({ where: { fileId, sharedWithId } });
-  }
-
-  private async assertOwns(ownerId: string, fileId: string) {
-    const f = await this.prisma.driveFile.findUnique({ where: { id: fileId }, select: { ownerId: true, storagePath: true } });
-    if (!f) throw new NotFoundException('File not found');
-    if (f.ownerId !== ownerId) throw new ForbiddenException();
-    return f;
+  private async assertFolderInSpace(spaceId: string, folderId: string) {
+    const folder = await this.prisma.driveFolder.findUnique({
+      where: { id: folderId },
+      select: { spaceId: true, isTrashed: true },
+    });
+    if (!folder) throw new NotFoundException('Target folder not found');
+    if (folder.spaceId !== spaceId) throw new BadRequestException('Cannot move file across spaces');
+    if (folder.isTrashed) throw new BadRequestException('Cannot move file into a trashed folder');
   }
 }

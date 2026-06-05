@@ -1,22 +1,15 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { z } from 'zod';
 
-export class CreateFolderDto {
-  @IsString()
-  @MinLength(1)
-  name: string;
+export const createFolderSchema = z.object({
+  spaceId: z.string().min(1),
+  name: z.string().min(1).max(255),
+  parentId: z.string().optional(),
+});
 
-  @IsString()
-  @IsOptional()
-  parentId?: string;
-}
+export const updateFolderSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  parentId: z.string().nullable().optional(),
+});
 
-export class UpdateFolderDto {
-  @IsString()
-  @MinLength(1)
-  @IsOptional()
-  name?: string;
-
-  @IsString()
-  @IsOptional()
-  parentId?: string;
-}
+export type CreateFolderDto = z.infer<typeof createFolderSchema>;
+export type UpdateFolderDto = z.infer<typeof updateFolderSchema>;

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,17 +12,20 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { Permission } from '@prisma/client';
+import { Permission, SpaceRole } from '@prisma/client';
 import { RequirePermissions } from '../../auth/decorators/require-permissions.decorator';
+import { RequireSpaceRole } from '../../auth/decorators/require-space-role.decorator';
 import { JwtOrApiKeyGuard } from '../../auth/guards/jwt-or-api-key.guard';
 import { PermissionGuard } from '../../auth/guards/permission.guard';
+import { SpaceMemberGuard } from '../../auth/guards/space-member.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { paginationQuerySchema, type PaginationQuery } from '../../common/pagination';
-import { CreateFolderDto, UpdateFolderDto } from './dto/folder.dto';
+import { createFolderSchema, updateFolderSchema, CreateFolderDto, UpdateFolderDto } from './dto/folder.dto';
 import { FoldersService } from './folders.service';
 
 interface AuthRequest {
   user: { sub: string };
+  query: Record<string, string>;
 }
 
 @Controller('drive/folders')
@@ -31,26 +35,37 @@ export class FoldersController {
 
   @Post()
   @RequirePermissions(Permission.DRIVE_FOLDER_CREATE)
-  create(@Request() req: AuthRequest, @Body() dto: CreateFolderDto) {
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.EDITOR, 'body')
+  create(
+    @Request() req: AuthRequest,
+    @Body(new ZodValidationPipe(createFolderSchema)) dto: CreateFolderDto,
+  ) {
     return this.foldersService.create(req.user.sub, dto);
   }
 
   @Post('trash/empty')
   @RequirePermissions(Permission.DRIVE_FOLDER_DELETE)
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.EDITOR, 'query')
   @HttpCode(200)
-  emptyTrash(@Request() req: AuthRequest) {
-    return this.foldersService.emptyTrash(req.user.sub);
+  emptyTrash(@Query('spaceId') spaceId: string) {
+    if (!spaceId) throw new BadRequestException('spaceId is required');
+    return this.foldersService.emptyTrash(spaceId);
   }
 
   @Get()
   @RequirePermissions(Permission.DRIVE_FOLDER_READ)
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.VIEWER, 'query')
   findAll(
-    @Request() req: AuthRequest,
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
+    @Query('spaceId') spaceId: string,
     @Query('parentId') parentId?: string,
     @Query('trashed') trashed?: string,
   ) {
-    return this.foldersService.findAll(req.user.sub, {
+    if (!spaceId) throw new BadRequestException('spaceId is required');
+    return this.foldersService.findAll(spaceId, {
       ...query,
       parentId,
       trashed: trashed === 'true',
@@ -59,32 +74,45 @@ export class FoldersController {
 
   @Get(':id')
   @RequirePermissions(Permission.DRIVE_FOLDER_READ)
-  findOne(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.foldersService.findOne(req.user.sub, id);
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.VIEWER, 'folder-param')
+  findOne(@Param('id') id: string) {
+    return this.foldersService.findOne(id);
   }
 
   @Patch(':id')
   @RequirePermissions(Permission.DRIVE_FOLDER_UPDATE)
-  update(@Request() req: AuthRequest, @Param('id') id: string, @Body() dto: UpdateFolderDto) {
-    return this.foldersService.update(req.user.sub, id, dto);
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.EDITOR, 'folder-param')
+  update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateFolderSchema)) dto: UpdateFolderDto,
+  ) {
+    return this.foldersService.update(id, dto);
   }
 
   @Patch(':id/trash')
   @RequirePermissions(Permission.DRIVE_FOLDER_UPDATE)
-  trash(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.foldersService.trash(req.user.sub, id);
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.EDITOR, 'folder-param')
+  trash(@Param('id') id: string) {
+    return this.foldersService.trash(id);
   }
 
   @Patch(':id/restore')
   @RequirePermissions(Permission.DRIVE_FOLDER_UPDATE)
-  restore(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.foldersService.restore(req.user.sub, id);
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.EDITOR, 'folder-param')
+  restore(@Param('id') id: string) {
+    return this.foldersService.restore(id);
   }
 
   @Delete(':id')
   @RequirePermissions(Permission.DRIVE_FOLDER_DELETE)
+  @UseGuards(SpaceMemberGuard)
+  @RequireSpaceRole(SpaceRole.EDITOR, 'folder-param')
   @HttpCode(204)
-  remove(@Request() req: AuthRequest, @Param('id') id: string) {
-    return this.foldersService.remove(req.user.sub, id);
+  remove(@Param('id') id: string) {
+    return this.foldersService.remove(id);
   }
 }

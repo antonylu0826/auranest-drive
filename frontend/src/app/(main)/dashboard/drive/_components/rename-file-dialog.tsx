@@ -50,7 +50,7 @@ export function RenameFileDialog({ open, onOpenChange, fileId, currentName, onRe
 
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (o) reset({ name: currentName }); }}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{t("rename")}</DialogTitle>
           <DialogDescription className="sr-only">{currentName}</DialogDescription>

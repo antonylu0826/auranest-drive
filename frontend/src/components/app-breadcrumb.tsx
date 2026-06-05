@@ -15,10 +15,10 @@ import {
 
 const SEGMENT_KEY_MAP: Record<string, string> = {
   dashboard: "dashboard",
-  drive: "drive",
-  shared: "shared",
+  spaces: "spaces",
   recent: "recent",
   trash: "trash",
+  members: "members",
   users: "users",
   home: "home",
   "api-keys": "apiKeys",

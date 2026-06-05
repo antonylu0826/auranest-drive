@@ -15,9 +15,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { SpaceRole } from '@prisma/client';
 import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { SpaceAccessService } from '../spaces/space-access.service';
+import { SYSTEM_ADMIN_ROLE } from '../auth/constants';
 import { WopiTokenGuard } from './wopi-token.guard';
 import { WopiTokenService } from './wopi-token.service';
 
@@ -31,7 +34,7 @@ export const COLLABORA_EXTENSIONS = new Set([
 const LOCK_TTL_SEC = 3600; // WOPI lock TTL — separate from WOPI_TOKEN_TTL_SEC
 
 interface AuthRequest extends Request {
-  user: { sub: string; email: string; name?: string };
+  user: { sub: string; email: string; name?: string; roleId?: string; roleName: string };
   wopi?: { fileId: string; userId: string; canWrite: boolean };
 }
 
@@ -41,6 +44,7 @@ export class WopiController {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly wopiToken: WopiTokenService,
+    private readonly spaceAccess: SpaceAccessService,
   ) {}
 
   // ── Get editor URL (requires regular JWT auth) ───────────────────────────
@@ -52,7 +56,7 @@ export class WopiController {
 
     const file = await this.prisma.driveFile.findUnique({
       where: { id: fileId },
-      select: { name: true, ownerId: true, isTrashed: true },
+      select: { name: true, spaceId: true, isTrashed: true },
     });
     if (!file || file.isTrashed) throw new NotFoundException('File not found');
 
@@ -61,11 +65,17 @@ export class WopiController {
       throw new ForbiddenException(`File type .${ext} is not supported by the online editor`);
     }
 
-    const share = await this.prisma.fileShare.findUnique({
-      where: { fileId_sharedWithId: { fileId, sharedWithId: userId } },
-      select: { permission: true },
-    });
-    const canWrite = file.ownerId === userId || share?.permission === 'EDIT';
+    const isAdmin = req.user.roleName === SYSTEM_ADMIN_ROLE;
+    let canWrite = isAdmin;
+    if (!isAdmin) {
+      const effectiveRole = await this.spaceAccess.resolveEffectiveRole(
+        userId,
+        req.user.roleId,
+        file.spaceId,
+      );
+      if (!effectiveRole) throw new ForbiddenException('No access to this file');
+      canWrite = effectiveRole === SpaceRole.OWNER || effectiveRole === SpaceRole.EDITOR;
+    }
 
     const accessToken = this.wopiToken.issue(fileId, userId, canWrite);
     const wopiPublicUrl = process.env.WOPI_PUBLIC_URL ?? 'http://localhost:3010';
@@ -92,7 +102,7 @@ export class WopiController {
     return {
       BaseFileName: file.name,
       Size: file.size,
-      OwnerId: file.ownerId,
+      OwnerId: file.spaceId,
       UserId: wopi.userId,
       UserFriendlyName: user?.name ?? user?.email ?? wopi.userId,
       UserCanWrite: wopi.canWrite,
@@ -160,7 +170,7 @@ export class WopiController {
     }
 
     const newVersion = file.version + 1;
-    const newKey = `${file.ownerId}/${file.id}/v${newVersion}/${file.name}`;
+    const newKey = `${file.spaceId}/${file.id}/v${newVersion}/${file.name}`;
 
     await this.storage.putObject(newKey, body, file.mimeType);
     const updated = await this.prisma.driveFile.update({

@@ -12,11 +12,12 @@ import { uploadFile, type UploadProgress } from "@/lib/api";
 const MAX_BYTES = 100 * 1024 * 1024;
 
 interface Props {
+  spaceId: string;
   folderId: string | undefined;
   onUploadComplete: () => void;
 }
 
-export function UploadZone({ folderId, onUploadComplete }: Props) {
+export function UploadZone({ spaceId, folderId, onUploadComplete }: Props) {
   const t = useTranslations("drive");
   const [tasks, setTasks] = useState<UploadProgress[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -32,7 +33,7 @@ export function UploadZone({ folderId, onUploadComplete }: Props) {
       const taskId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setTasks((prev) => [...prev, { taskId, name: file.name, progress: 0, status: "uploading" }]);
 
-      void uploadFile(file, folderId, (pct) => {
+      void uploadFile(file, spaceId, folderId, (pct) => {
         setTasks((prev) => prev.map((tk) => (tk.taskId === taskId ? { ...tk, progress: pct } : tk)));
       })
         .then(() => {

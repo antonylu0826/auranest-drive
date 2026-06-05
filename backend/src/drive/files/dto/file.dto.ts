@@ -1,21 +1,8 @@
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
-import { SharePermission } from '@prisma/client';
+import { z } from 'zod';
 
-export class UpdateFileDto {
-  @IsString()
-  @MinLength(1)
-  @IsOptional()
-  name?: string;
+export const updateFileSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  folderId: z.string().nullable().optional(),
+});
 
-  @IsString()
-  @IsOptional()
-  folderId?: string;
-}
-
-export class ShareFileDto {
-  @IsString()
-  sharedWithId: string;
-
-  @IsEnum(SharePermission)
-  permission: SharePermission;
-}
+export type UpdateFileDto = z.infer<typeof updateFileSchema>;
