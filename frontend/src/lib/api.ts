@@ -84,6 +84,7 @@ export interface DriveFile {
   ownerId: string;
   folderId: string | null;
   isTrashed: boolean;
+  space: { id: string; name: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -100,18 +101,20 @@ export interface FileShare {
 export interface FolderListQuery extends ListQuery {
   parentId?: string;
   trashed?: boolean;
+  spaceId?: string;
 }
 
 export interface FileListQuery extends ListQuery {
   folderId?: string;
   trashed?: boolean;
+  spaceId?: string;
 }
 
 export const foldersApi = {
   list: (query?: FolderListQuery) =>
     apiFetch<PaginatedResult<DriveFolder>>(`/drive/folders${toQueryString({ ...query })}`),
   get: (id: string) => apiFetch<DriveFolder>(`/drive/folders/${id}`),
-  create: (data: { name: string; parentId?: string }) =>
+  create: (data: { name: string; parentId?: string; spaceId?: string }) =>
     apiFetch<DriveFolder>("/drive/folders", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: { name?: string; parentId?: string }) =>
     apiFetch<DriveFolder>(`/drive/folders/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -120,7 +123,7 @@ export const foldersApi = {
   restore: (id: string) =>
     apiFetch<DriveFolder>(`/drive/folders/${id}/restore`, { method: "PATCH" }),
   remove: (id: string) => apiFetch<void>(`/drive/folders/${id}`, { method: "DELETE" }),
-  emptyTrash: () => apiFetch<{ count: number }>("/drive/folders/trash/empty", { method: "POST" }),
+  emptyTrash: (spaceId?: string) => apiFetch<{ count: number }>("/drive/folders/trash/empty", { method: "POST" }),
 };
 
 export interface UploadProgress {
@@ -132,12 +135,14 @@ export interface UploadProgress {
 
 export function uploadFile(
   file: File,
+  spaceId: string,
   folderId: string | undefined,
   onProgress: (pct: number) => void,
 ): Promise<DriveFile> {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("spaceId", spaceId);
     if (folderId) formData.append("folderId", folderId);
 
     const xhr = new XMLHttpRequest();
@@ -177,6 +182,8 @@ export const filesApi = {
     apiFetch<PaginatedResult<DriveFile>>(`/drive/files${toQueryString({ ...query })}`),
   sharedWithMe: (query?: ListQuery) =>
     apiFetch<PaginatedResult<FileShare>>(`/drive/files/shared-with-me${toQueryString({ ...query })}`),
+  recent: (query?: ListQuery) =>
+    apiFetch<PaginatedResult<DriveFile>>(`/drive/files/recent${toQueryString({ ...query })}`),
   get: (id: string) => apiFetch<DriveFile>(`/drive/files/${id}`),
   getDownloadUrl: (id: string) =>
     apiFetch<{ url: string }>(`/drive/files/${id}/download`),
@@ -191,5 +198,5 @@ export const filesApi = {
     apiFetch<FileShare>(`/drive/files/${id}/shares`, { method: "POST", body: JSON.stringify(data) }),
   unshare: (id: string, userId: string) =>
     apiFetch<void>(`/drive/files/${id}/shares/${userId}`, { method: "DELETE" }),
-  emptyTrash: () => apiFetch<{ count: number }>("/drive/files/trash/empty", { method: "POST" }),
+  emptyTrash: (spaceId?: string) => apiFetch<{ count: number }>("/drive/files/trash/empty", { method: "POST" }),
 };

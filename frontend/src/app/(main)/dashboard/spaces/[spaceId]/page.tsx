@@ -44,7 +44,7 @@ export default function SpaceDrivePage() {
   const tc = useTranslations("common");
   const qc = useQueryClient();
   const currentUser = useCurrentUser();
-  const isAdmin = currentUser?.roleName === "ADMIN";
+  const isAdmin = currentUser?.roleNames?.includes("ADMIN") ?? false;
 
   const [folderPath, setFolderPath] = useState<FolderCrumb[]>([]);
   const [search, setSearch] = useState("");

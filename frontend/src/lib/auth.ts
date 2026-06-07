@@ -38,7 +38,8 @@ export function decodeToken(token: string): CurrentUser | null {
       email: (decoded.email as string) ?? "",
       name: (decoded.name as string | undefined) ?? (decoded.email as string) ?? "User",
       avatar: "",
-      roleNames: (decoded.roleNames as string[] | undefined) ?? [],
+      roleNames: (decoded.roleNames as string[] | undefined)
+        ?? (decoded.roleName ? [decoded.roleName as string] : []),
       permissionPolicy: (decoded.permissionPolicy as string | undefined) ?? "DENY_ALL",
       permissions: (decoded.permissions as string[] | undefined) ?? [],
     };

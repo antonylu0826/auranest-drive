@@ -15,7 +15,7 @@ export default function SpacesPage() {
   const t = useTranslations("spaces");
   const tc = useTranslations("common");
   const currentUser = useCurrentUser();
-  const isAdmin = currentUser?.roleName === "ADMIN";
+  const isAdmin = currentUser?.roleNames?.includes("ADMIN") ?? false;
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: spaces = [], isLoading } = useQuery({

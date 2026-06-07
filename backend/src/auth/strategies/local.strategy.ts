@@ -7,7 +7,9 @@ interface JwtPayload {
   sub: string;
   email: string;
   name?: string;
-  roleNames: string[];
+  roleId?: string;
+  roleName?: string;   // primary role name (backward-compat singular form)
+  roleNames?: string[];
   permissionPolicy: string;
   permissions: Permission[];
 }
@@ -23,11 +25,15 @@ export class LocalStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   validate(payload: JwtPayload) {
+    const roleNames = payload.roleNames ?? (payload.roleName ? [payload.roleName] : []);
+    const roleName = payload.roleName ?? roleNames[0] ?? '';
     return {
       sub: payload.sub,
       email: payload.email,
       name: payload.name,
-      roleNames: payload.roleNames ?? [],
+      roleId: payload.roleId,
+      roleName,
+      roleNames,
       permissionPolicy: payload.permissionPolicy ?? 'DENY_ALL',
       permissions: payload.permissions ?? [],
     };

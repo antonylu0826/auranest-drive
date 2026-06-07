@@ -19,7 +19,7 @@ import {
 export function NavSpaces() {
   const path = usePathname();
   const currentUser = useCurrentUser();
-  const isAdmin = currentUser?.roleName === "ADMIN";
+  const isAdmin = currentUser?.roleNames?.includes("ADMIN") ?? false;
   const t = useTranslations("sidebar");
 
   const { data: spaces = [] } = useQuery({
