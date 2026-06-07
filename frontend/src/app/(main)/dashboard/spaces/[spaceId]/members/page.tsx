@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -52,6 +52,7 @@ type AddGrantForm = z.infer<typeof addGrantSchema>;
 
 export default function SpaceMembersPage() {
   const { spaceId } = useParams<{ spaceId: string }>();
+  const router = useRouter();
   const t = useTranslations("spaces");
   const tc = useTranslations("common");
   const qc = useQueryClient();
@@ -60,6 +61,7 @@ export default function SpaceMembersPage() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddGrant, setShowAddGrant] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ type: "member"; userId: string } | { type: "grant"; roleId: string } | null>(null);
+  const [showDeleteSpace, setShowDeleteSpace] = useState(false);
 
   const { data: members = [] } = useQuery({
     queryKey: ["space-members", spaceId],
@@ -160,6 +162,15 @@ export default function SpaceMembersPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["space-role-grants", spaceId] });
       setRemoveTarget(null);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Error"),
+  });
+
+  const deleteSpace = useMutation({
+    mutationFn: () => spacesApi.remove(spaceId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["spaces"] });
+      router.push("/dashboard/spaces");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Error"),
   });
@@ -357,6 +368,22 @@ export default function SpaceMembersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Danger Zone */}
+      <div className="mt-8 rounded-md border border-destructive/40">
+        <div className="px-4 py-3 bg-destructive/5 border-b border-destructive/40 rounded-t-md">
+          <h2 className="text-sm font-semibold text-destructive">{t("dangerZone")}</h2>
+        </div>
+        <div className="px-4 py-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">{t("deleteSpace")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t("deleteSpaceDesc")}</p>
+          </div>
+          <Button variant="destructive" size="sm" onClick={() => setShowDeleteSpace(true)}>
+            {t("deleteSpace")}
+          </Button>
+        </div>
+      </div>
+
       {/* Remove confirm */}
       <AlertDialog open={removeTarget !== null} onOpenChange={(o) => { if (!o) setRemoveTarget(null); }}>
         <AlertDialogContent>
@@ -374,6 +401,24 @@ export default function SpaceMembersPage() {
                 if (removeTarget?.type === "member") removeMember.mutate(removeTarget.userId);
                 else if (removeTarget?.type === "grant") removeGrant.mutate(removeTarget.roleId);
               }}
+            >
+              {tc("delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Delete space confirm */}
+      <AlertDialog open={showDeleteSpace} onOpenChange={setShowDeleteSpace}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("deleteSpace")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("deleteConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tc("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteSpace.mutate()}
             >
               {tc("delete")}
             </AlertDialogAction>

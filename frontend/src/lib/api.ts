@@ -142,8 +142,9 @@ export function uploadFile(
   return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("spaceId", spaceId);
-    if (folderId) formData.append("folderId", folderId);
+
+    const qs = new URLSearchParams({ spaceId });
+    if (folderId) qs.set("folderId", folderId);
 
     const xhr = new XMLHttpRequest();
     xhr.upload.onprogress = (e) => {
@@ -158,7 +159,7 @@ export function uploadFile(
       }
     };
     xhr.onerror = () => reject(new Error("Network error"));
-    xhr.open("POST", `${API}/drive/files/upload`);
+    xhr.open("POST", `${API}/drive/files/upload?${qs}`);
     const token = getToken();
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);

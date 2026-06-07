@@ -25,6 +25,16 @@ const PUBLIC_FIELDS = {
   createdAt: true,
 } as const;
 
+type RawUser = {
+  userRoles: { role: { id: string; name: string; displayName: string; permissionPolicy: string } }[];
+  [key: string]: unknown;
+};
+
+function toPublic<T extends RawUser>(raw: T) {
+  const { userRoles, ...rest } = raw;
+  return { ...rest, roles: userRoles.map((ur) => ur.role) };
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,7 +55,7 @@ export class UsersService {
         : [await this.resolveDefaultRoleId()];
 
     const { email, password, name } = data;
-    return this.prisma.user.create({
+    const raw = await this.prisma.user.create({
       data: {
         email,
         password,
@@ -56,6 +66,7 @@ export class UsersService {
       },
       select: PUBLIC_FIELDS,
     });
+    return toPublic(raw);
   }
 
   // Includes role + permissions for JWT signing in auth.controller
@@ -93,29 +104,31 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return paginate(data, total);
+    return paginate(data.map(toPublic), total);
   }
 
   async findById(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: PUBLIC_FIELDS });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    return toPublic(user);
   }
 
   async update(id: string, dto: UpdateUserDto) {
     await this.findById(id);
-    return this.prisma.user.update({ where: { id }, data: dto, select: PUBLIC_FIELDS });
+    const raw = await this.prisma.user.update({ where: { id }, data: dto, select: PUBLIC_FIELDS });
+    return toPublic(raw);
   }
 
   async updateRoles(id: string, roleIds: string[]) {
     await this.findById(id);
-    return this.prisma.$transaction(async (tx) => {
+    const raw = await this.prisma.$transaction(async (tx) => {
       await tx.userRole.deleteMany({ where: { userId: id } });
       await tx.userRole.createMany({
         data: roleIds.map((roleId) => ({ userId: id, roleId })),
       });
       return tx.user.findUnique({ where: { id }, select: PUBLIC_FIELDS });
     });
+    return raw ? toPublic(raw) : null;
   }
 
   async remove(id: string) {
